@@ -1,0 +1,18 @@
+# --- C# / .NET ---
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# --- Bancos de Dados (Proteção total) ---
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# --- Logs e arquivos temporários ---
+*.log
+*.tmp
