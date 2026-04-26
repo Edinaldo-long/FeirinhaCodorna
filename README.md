@@ -7,7 +7,9 @@ Sistema de gestão comercial desktop desenvolvido para auxiliar no controle de v
 ## 📸 A Equipe e o Projeto
 Aqui estou eu, na prática, fazendo o sistema acontecer no dia a dia da feirinha!
 
-![Edinaldo na Feirinha do Codorna](assets/foto-feirinha.jpg)
+<p align="center">
+  <img src="assets/foto-feirinha.jpg" alt="Edinaldo na Feirinha do Codorna" width="500"/>
+</p>
 
 ## 🚀 Sobre o Projeto
 O Feirinha Codorna foi desenvolvido para facilitar a gestão de pequenas mercearias e feiras livres. O foco é oferecer uma ferramenta simples, rápida e eficiente, garantindo que o pequeno comerciante tenha controle total sobre suas movimentações diárias, sem depender de internet ou sistemas complexos.
