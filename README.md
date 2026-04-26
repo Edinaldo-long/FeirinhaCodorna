@@ -32,9 +32,7 @@ O Feirinha Codorna foi desenvolvido para facilitar a gestão de pequenas mercear
 
 | Tela de Vendas | Tela de Pagamento |
 | :---: | :---: |
-| <p align="center">
-  <img src="assets/print-vendas.png" alt="Vendas" width="500"/>
-</p> | ![Pagamento](assets/print-pagamento.png) |
+| ![Vendas](assets/print-vendas.png) | ![Pagamento](assets/print-pagamento.png) |
 
 ## ⚙️ Como rodar o projeto
 1. Clone este repositório: `git clone https://github.com/Edinaldo-long/FeirinhaCodorna.git`
