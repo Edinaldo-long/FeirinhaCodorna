@@ -28,7 +28,7 @@ O Feirinha Codorna foi desenvolvido para facilitar a gestão de pequenas mercear
 - **Segurança:** Sistema de login com criptografia.
 
 ## 🖼️ Galeria de Imagens
-*(Aqui você pode colocar os prints que você tirou das telas)*
+
 
 | Tela de Vendas | Tela de Pagamento |
 | :---: | :---: |
