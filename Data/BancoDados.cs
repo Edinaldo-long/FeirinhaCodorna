@@ -1,14 +1,13 @@
-﻿using Microsoft.Data.Sqlite;
+﻿using FeirinhaCodorna.Forms;
 using FeirinhaCodorna.Models;
-using FeirinhaCodorna.Utils; // ← usa a Seguranca correta (hex)
+using FeirinhaCodorna.Utils;
+using Microsoft.Data.Sqlite;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace FeirinhaCodorna.Data
 {
-    // REMOVIDA a classe Seguranca daqui — use sempre FeirinhaCodorna.Utils.Seguranca
-
     public class BancoDados
     {
         private readonly string _conexao;
@@ -18,10 +17,9 @@ namespace FeirinhaCodorna.Data
             _conexao = "Data Source=feirinha.db";
             CriarTabelas();
             MigrarTabelas();
-            SeedUsuarioAdmin(); // garante que admin existe com hash correto
+            SeedUsuarioAdmin();
         }
 
-        // Garante que o usuário admin existe com a senha correta
         private void SeedUsuarioAdmin()
         {
             using var con = new SqliteConnection(_conexao);
@@ -192,7 +190,6 @@ namespace FeirinhaCodorna.Data
                 "ALTER TABLE Despesas ADD COLUMN Situacao TEXT DEFAULT 'Pendente'",
                 "ALTER TABLE Despesas ADD COLUMN DataPagamento TEXT DEFAULT NULL",
                 "ALTER TABLE Despesas ADD COLUMN FormaPagamentoBaixa TEXT DEFAULT NULL",
-                // Funcionarios — colunas legadas (para bancos antigos)
                 "ALTER TABLE Funcionarios ADD COLUMN RG TEXT DEFAULT ''",
                 "ALTER TABLE Funcionarios ADD COLUMN Endereco TEXT DEFAULT ''",
                 "ALTER TABLE Funcionarios ADD COLUMN Numero TEXT DEFAULT ''",
@@ -675,6 +672,209 @@ namespace FeirinhaCodorna.Data
         }
 
         // ==================== VENDAS ====================
+
+        /// <summary>
+        /// Busca vendas ativas (não estornadas) por período e filtro de cliente/nº cupom.
+        /// Usada tanto pelo FormEstorno quanto pelo FormRelatorio.
+        /// </summary>
+        public List<VendaResumo> BuscarVendasParaEstorno(string filtro, DateTime de, DateTime ate)
+        {
+            var lista = new List<VendaResumo>();
+            using var con = new SqliteConnection(_conexao);
+            con.Open();
+
+            var cmd = con.CreateCommand();
+            cmd.CommandText = @"
+                SELECT v.Id, v.DataHora, v.ClienteNome, v.FormaPagamento,
+                       COALESCE(SUM(i.Quantidade * i.PrecoUnitario), 0) AS Total
+                FROM Vendas v
+                LEFT JOIN ItensVenda i ON i.VendaId = v.Id
+                WHERE v.FormaPagamento NOT LIKE 'ESTORNADA%'
+                  AND date(v.DataHora) >= $de
+                  AND date(v.DataHora) <= $ate
+                  AND (
+                      v.ClienteNome LIKE $filtro
+                      OR CAST(v.Id AS TEXT) LIKE $filtro
+                  )
+                GROUP BY v.Id
+                ORDER BY v.DataHora DESC";
+
+            cmd.Parameters.AddWithValue("$de", de.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("$ate", ate.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("$filtro", string.IsNullOrEmpty(filtro) ? "%" : $"%{filtro}%");
+
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                lista.Add(new VendaResumo
+                {
+                    Id = r.GetInt32(0),
+                    DataHora = DateTime.Parse(r.GetString(1)),
+                    ClienteNome = r.IsDBNull(2) ? "" : r.GetString(2),
+                    FormaPagamento = r.IsDBNull(3) ? "" : r.GetString(3),
+                    Total = (decimal)r.GetDouble(4)
+                });
+
+            return lista;
+        }
+
+        /// <summary>
+        /// Busca vendas que já foram estornadas no período informado.
+        /// Usada pelo FormRelatorio (aba Estornos).
+        /// O motivo do estorno fica em FormaPagamento no formato "ESTORNADA:motivo".
+        /// </summary>
+        public List<VendaResumo> BuscarVendasEstornadas(DateTime de, DateTime ate)
+        {
+            var lista = new List<VendaResumo>();
+            using var con = new SqliteConnection(_conexao);
+            con.Open();
+
+            var cmd = con.CreateCommand();
+            cmd.CommandText = @"
+                SELECT v.Id, v.DataHora, v.ClienteNome, v.FormaPagamento,
+                       COALESCE(SUM(i.Quantidade * i.PrecoUnitario), 0) AS Total
+                FROM Vendas v
+                LEFT JOIN ItensVenda i ON i.VendaId = v.Id
+                WHERE v.FormaPagamento LIKE 'ESTORNADA%'
+                  AND date(v.DataHora) >= $de
+                  AND date(v.DataHora) <= $ate
+                GROUP BY v.Id
+                ORDER BY v.DataHora DESC";
+
+            cmd.Parameters.AddWithValue("$de", de.ToString("yyyy-MM-dd"));
+            cmd.Parameters.AddWithValue("$ate", ate.ToString("yyyy-MM-dd"));
+
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                lista.Add(new VendaResumo
+                {
+                    Id = r.GetInt32(0),
+                    DataHora = DateTime.Parse(r.GetString(1)),
+                    ClienteNome = r.IsDBNull(2) ? "" : r.GetString(2),
+                    FormaPagamento = r.IsDBNull(3) ? "" : r.GetString(3), // "ESTORNADA:motivo"
+                    Total = (decimal)r.GetDouble(4)
+                });
+
+            return lista;
+        }
+
+        /// <summary>
+        /// Busca uma venda completa com todos os seus itens pelo Id.
+        /// </summary>
+        public Venda? BuscarVendaComItens(int vendaId)
+        {
+            using var con = new SqliteConnection(_conexao);
+            con.Open();
+
+            var cmd = con.CreateCommand();
+            cmd.CommandText = "SELECT * FROM Vendas WHERE Id = $id LIMIT 1";
+            cmd.Parameters.AddWithValue("$id", vendaId);
+            using var r = cmd.ExecuteReader();
+            if (!r.Read()) return null;
+
+            var venda = new Venda
+            {
+                Id = r.GetInt32(0),
+                DataHora = DateTime.Parse(r.GetString(1)),
+                ClienteId = r.IsDBNull(2) ? null : r.GetInt32(2),
+                ClienteNome = r.IsDBNull(3) ? "" : r.GetString(3),
+                FormaPagamento = Enum.Parse<FormaPagamento>(r.GetString(4))
+            };
+            r.Close();
+
+            var ci = con.CreateCommand();
+            ci.CommandText = "SELECT * FROM ItensVenda WHERE VendaId = $vid";
+            ci.Parameters.AddWithValue("$vid", vendaId);
+            using var ri = ci.ExecuteReader();
+            while (ri.Read())
+                venda.Itens.Add(new ItemVenda
+                {
+                    Id = ri.GetInt32(0),
+                    ProdutoId = ri.GetInt32(2),
+                    ProdutoNome = ri.GetString(3),
+                    Quantidade = (decimal)ri.GetDouble(4),
+                    PrecoUnitario = (decimal)ri.GetDouble(5)
+                });
+
+            return venda;
+        }
+
+        /// <summary>
+        /// Estorna uma venda: devolve estoque, reverte fiado se houver, marca como estornada.
+        /// Funciona para qualquer venda independente da data.
+        /// </summary>
+        public void EstornarVenda(int vendaId, string motivo)
+        {
+            using var con = new SqliteConnection(_conexao);
+            con.Open();
+
+            // busca itens para devolver ao estoque
+            var ci = con.CreateCommand();
+            ci.CommandText = "SELECT ProdutoId, Quantidade FROM ItensVenda WHERE VendaId = $vid";
+            ci.Parameters.AddWithValue("$vid", vendaId);
+            using var ri = ci.ExecuteReader();
+            var itens = new List<(int ProdutoId, decimal Qtd)>();
+            while (ri.Read())
+                itens.Add((ri.GetInt32(0), (decimal)ri.GetDouble(1)));
+            ri.Close();
+
+            // devolve ao estoque
+            foreach (var (prodId, qtd) in itens)
+            {
+                var ce = con.CreateCommand();
+                ce.CommandText = "UPDATE Produtos SET Estoque = Estoque + $qtd WHERE Id = $pid";
+                ce.Parameters.AddWithValue("$qtd", qtd);
+                ce.Parameters.AddWithValue("$pid", prodId);
+                ce.ExecuteNonQuery();
+            }
+
+            // reverte fiado se a venda era caderneta
+            var cf = con.CreateCommand();
+            cf.CommandText = "SELECT ClienteId, FormaPagamento FROM Vendas WHERE Id = $id";
+            cf.Parameters.AddWithValue("$id", vendaId);
+            using var rf = cf.ExecuteReader();
+            if (rf.Read() && !rf.IsDBNull(0))
+            {
+                int clienteId = rf.GetInt32(0);
+                string forma = rf.GetString(1);
+                rf.Close();
+
+                if (forma == "Fiado")
+                {
+                    var ct = con.CreateCommand();
+                    ct.CommandText = "SELECT COALESCE(SUM(Quantidade * PrecoUnitario), 0) FROM ItensVenda WHERE VendaId = $vid";
+                    ct.Parameters.AddWithValue("$vid", vendaId);
+                    decimal total = (decimal)Convert.ToDouble(ct.ExecuteScalar()!);
+
+                    var cu = con.CreateCommand();
+                    cu.CommandText = "UPDATE Clientes SET SaldoFiado = SaldoFiado - $val WHERE Id = $id";
+                    cu.Parameters.AddWithValue("$val", total);
+                    cu.Parameters.AddWithValue("$id", clienteId);
+                    cu.ExecuteNonQuery();
+                }
+            }
+            else rf.Close();
+
+            // marca venda como estornada — motivo gravado no campo FormaPagamento
+            var cm = con.CreateCommand();
+            cm.CommandText = "UPDATE Vendas SET FormaPagamento = $forma WHERE Id = $id";
+            cm.Parameters.AddWithValue("$forma", $"ESTORNADA:{motivo}");
+            cm.Parameters.AddWithValue("$id", vendaId);
+            cm.ExecuteNonQuery();
+        }
+
+        /// <summary>
+        /// Retorna o Id da última venda não estornada.
+        /// </summary>
+        public int? UltimaVendaId()
+        {
+            using var con = new SqliteConnection(_conexao);
+            con.Open();
+            var cmd = con.CreateCommand();
+            cmd.CommandText = "SELECT Id FROM Vendas WHERE FormaPagamento NOT LIKE 'ESTORNADA%' ORDER BY Id DESC LIMIT 1";
+            var result = cmd.ExecuteScalar();
+            return result == null || result == DBNull.Value ? null : (int)(long)result;
+        }
+
         public void SalvarVenda(Venda v)
         {
             using var con = new SqliteConnection(_conexao);
@@ -791,7 +991,11 @@ namespace FeirinhaCodorna.Data
             if (de.HasValue) { where.Append(" AND Data >= $de"); cmd.Parameters.AddWithValue("$de", de.Value.ToString("yyyy-MM-dd")); }
             if (ate.HasValue) { where.Append(" AND Data <= $ate"); cmd.Parameters.AddWithValue("$ate", ate.Value.ToString("yyyy-MM-dd")); }
             if (!string.IsNullOrWhiteSpace(cat)) { where.Append(" AND Categoria = $cat"); cmd.Parameters.AddWithValue("$cat", cat); }
-            if (sit == "Vencido") { where.Append(" AND Situacao = 'Pendente' AND Vencimento IS NOT NULL AND Vencimento < $hoje"); cmd.Parameters.AddWithValue("$hoje", DateTime.Today.ToString("yyyy-MM-dd")); }
+            if (sit == "Vencido")
+            {
+                where.Append(" AND Situacao = 'Pendente' AND Vencimento IS NOT NULL AND Vencimento < $hoje");
+                cmd.Parameters.AddWithValue("$hoje", DateTime.Today.ToString("yyyy-MM-dd"));
+            }
             else if (!string.IsNullOrWhiteSpace(sit)) { where.Append(" AND Situacao = $sit"); cmd.Parameters.AddWithValue("$sit", sit); }
             if (!string.IsNullOrWhiteSpace(busca)) { where.Append(" AND Descricao LIKE $busca"); cmd.Parameters.AddWithValue("$busca", $"%{busca}%"); }
             if (parc) where.Append(" AND Descricao LIKE '%(%/%)'");

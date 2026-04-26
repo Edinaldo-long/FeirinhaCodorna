@@ -22,6 +22,7 @@
             this.lblCliente = new System.Windows.Forms.Label();
             this.txtEan = new System.Windows.Forms.TextBox();
             this.txtPeso = new System.Windows.Forms.TextBox();
+            this.btnTara = new System.Windows.Forms.Button();
             this.btnAddPesado = new System.Windows.Forms.Button();
             this.lblProdutoAtual = new System.Windows.Forms.Label();
             this.grdItens = new System.Windows.Forms.DataGridView();
@@ -32,7 +33,8 @@
             this.btnCredito = new System.Windows.Forms.Button();
             this.btnPix = new System.Windows.Forms.Button();
             this.btnFiado = new System.Windows.Forms.Button();
-            this.btnMisto = new System.Windows.Forms.Button();   // << NOVO
+            this.btnMisto = new System.Windows.Forms.Button();
+            this.btnEstornar = new System.Windows.Forms.Button();
             this.btnCancelar = new System.Windows.Forms.Button();
 
             ((System.ComponentModel.ISupportInitialize)(this.grdItens)).BeginInit();
@@ -121,6 +123,17 @@
             this.txtEan.Name = "txtEan";
             this.txtEan.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
 
+            this.btnTara.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnTara.Text = "Tara";
+            this.btnTara.Size = new System.Drawing.Size(72, 38);
+            this.btnTara.Name = "btnTara";
+            this.btnTara.Margin = new System.Windows.Forms.Padding(0, 0, 6, 0);
+            this.btnTara.BackColor = System.Drawing.Color.FromArgb(200, 200, 195);
+            this.btnTara.ForeColor = System.Drawing.Color.FromArgb(60, 60, 60);
+            this.btnTara.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnTara.FlatAppearance.BorderSize = 0;
+            this.btnTara.Cursor = System.Windows.Forms.Cursors.Hand;
+
             this.txtPeso.Font = fonteNormal;
             this.txtPeso.Size = new System.Drawing.Size(150, 36);
             this.txtPeso.PlaceholderText = "Peso (kg)";
@@ -133,7 +146,7 @@
             this.btnAddPesado.Name = "btnAddPesado";
 
             linhaEan.Controls.AddRange(new System.Windows.Forms.Control[] {
-                this.txtEan, this.txtPeso, this.btnAddPesado
+                this.txtEan, this.btnTara, this.txtPeso, this.btnAddPesado
             });
 
             this.lblProdutoAtual.Font = fonteProduto;
@@ -199,20 +212,20 @@
             linhaTotalRemover.Controls.Add(this.lblTotal, 0, 0);
             linhaTotalRemover.Controls.Add(this.btnRemover, 1, 0);
 
-            // ── linha pagamentos (agora com 8 colunas) ────────────────
+            // ── linha pagamentos (9 colunas) ──────────────────────────
             var linhaPagamentos = new System.Windows.Forms.TableLayoutPanel
             {
                 Dock = System.Windows.Forms.DockStyle.Fill,
-                ColumnCount = 8,
+                ColumnCount = 9,
                 RowCount = 1
             };
-            // 6 botões de tamanho automático + espaçador + cancelar
-            for (int i = 0; i < 6; i++)
+            // colunas 0-6: AutoSize  |  coluna 7: espaçador  |  coluna 8: AutoSize
+            for (int i = 0; i < 7; i++)
                 linhaPagamentos.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
             linhaPagamentos.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
             linhaPagamentos.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.AutoSize));
 
-            // botões de forma única
+            // botões de forma única — colunas 0-4
             System.Windows.Forms.Button[] btnsPag = { this.btnDinheiro, this.btnDebito, this.btnCredito, this.btnPix, this.btnFiado };
             string[] textosPag = { "Dinheiro", "Débito", "Crédito", "Pix", "Caderneta" };
             for (int i = 0; i < btnsPag.Length; i++)
@@ -224,25 +237,37 @@
                 linhaPagamentos.Controls.Add(btnsPag[i], i, 0);
             }
 
-            // botão Misto (coluna 5)
+            // Misto — coluna 5
             this.btnMisto.Font = fonteBotao;
             this.btnMisto.Text = "Misto";
             this.btnMisto.Size = new System.Drawing.Size(110, 50);
             this.btnMisto.Name = "btnMisto";
             this.btnMisto.Margin = new System.Windows.Forms.Padding(0, 2, 6, 2);
-            this.btnMisto.BackColor = System.Drawing.Color.FromArgb(255, 165, 0);  // laranja — destaque visual
+            this.btnMisto.BackColor = System.Drawing.Color.FromArgb(255, 165, 0);
             this.btnMisto.ForeColor = System.Drawing.Color.White;
             this.btnMisto.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnMisto.FlatAppearance.BorderSize = 0;
             linhaPagamentos.Controls.Add(this.btnMisto, 5, 0);
 
-            // botão Cancelar venda (coluna 7)
+            // Estornar — coluna 6
+            this.btnEstornar.Font = fonteBotao;
+            this.btnEstornar.Text = "Estornar";
+            this.btnEstornar.Size = new System.Drawing.Size(120, 50);
+            this.btnEstornar.Name = "btnEstornar";
+            this.btnEstornar.Margin = new System.Windows.Forms.Padding(0, 2, 6, 2);
+            this.btnEstornar.BackColor = System.Drawing.Color.FromArgb(180, 30, 30);
+            this.btnEstornar.ForeColor = System.Drawing.Color.White;
+            this.btnEstornar.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnEstornar.FlatAppearance.BorderSize = 0;
+            linhaPagamentos.Controls.Add(this.btnEstornar, 6, 0);
+
+            // Cancelar venda — coluna 8
             this.btnCancelar.Font = fonteBotao;
             this.btnCancelar.Text = "Cancelar venda";
             this.btnCancelar.Size = new System.Drawing.Size(170, 50);
             this.btnCancelar.Name = "btnCancelar";
             this.btnCancelar.Margin = new System.Windows.Forms.Padding(0, 2, 0, 2);
-            linhaPagamentos.Controls.Add(this.btnCancelar, 7, 0);
+            linhaPagamentos.Controls.Add(this.btnCancelar, 8, 0);
 
             painelInferior.Controls.Add(this.grdItens, 0, 0);
             painelInferior.Controls.Add(linhaTotalRemover, 0, 1);
@@ -270,6 +295,7 @@
         private System.Windows.Forms.Label lblCliente = null!;
         private System.Windows.Forms.TextBox txtEan = null!;
         private System.Windows.Forms.TextBox txtPeso = null!;
+        private System.Windows.Forms.Button btnTara = null!;
         private System.Windows.Forms.Button btnAddPesado = null!;
         private System.Windows.Forms.Label lblProdutoAtual = null!;
         private System.Windows.Forms.DataGridView grdItens = null!;
@@ -280,7 +306,8 @@
         private System.Windows.Forms.Button btnCredito = null!;
         private System.Windows.Forms.Button btnPix = null!;
         private System.Windows.Forms.Button btnFiado = null!;
-        private System.Windows.Forms.Button btnMisto = null!;   // << NOVO
+        private System.Windows.Forms.Button btnMisto = null!;
+        private System.Windows.Forms.Button btnEstornar = null!;
         private System.Windows.Forms.Button btnCancelar = null!;
     }
 }

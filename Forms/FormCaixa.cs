@@ -11,6 +11,7 @@ namespace FeirinhaCodorna.Forms
         private readonly List<ItemVenda> _itens = new();
         private Produto? _produtoAtual;
         private SerialPort? _balanca;
+        private decimal _tara = 0m;
 
         public FormCaixa(BancoDados db)
         {
@@ -50,9 +51,10 @@ namespace FeirinhaCodorna.Forms
                     System.Globalization.CultureInfo.InvariantCulture,
                     out float peso))
                 {
+                    decimal pesoLiquido = Math.Max(0, (decimal)peso - _tara);
                     txtPeso.Invoke(() =>
                     {
-                        txtPeso.Text = peso.ToString("0.000",
+                        txtPeso.Text = pesoLiquido.ToString("0.000",
                             System.Globalization.CultureInfo.InvariantCulture);
                     });
                 }
@@ -85,6 +87,22 @@ namespace FeirinhaCodorna.Forms
             txtEan.KeyDown += TxtEan_KeyDown;
             txtPeso.KeyDown += TxtPeso_KeyDown;
 
+            btnTara.Click += (s, e) => CapturarTara();
+            btnTara.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter)
+                {
+                    e.SuppressKeyPress = true;
+                    CapturarTara();
+                    txtPeso.Focus();
+                }
+                else if (e.KeyCode == Keys.Tab)
+                {
+                    e.SuppressKeyPress = true;
+                    txtPeso.Focus();
+                }
+            };
+
             btnAddPesado.Click += (s, e) => ConfirmarPesado();
             btnRemover.Click += (s, e) => RemoverItem();
 
@@ -94,7 +112,8 @@ namespace FeirinhaCodorna.Forms
             btnCredito.Click += (s, e) => FinalizarVenda(FormaPagamento.CartaoCredito);
             btnPix.Click += (s, e) => FinalizarVenda(FormaPagamento.Pix);
             btnFiado.Click += (s, e) => FinalizarVenda(FormaPagamento.Fiado);
-            btnMisto.Click += (s, e) => AbrirPagamentoMisto();   // << NOVO BOTÃO
+            btnMisto.Click += (s, e) => AbrirPagamentoMisto();
+            btnEstornar.Click += (s, e) => EstornarUltimaVenda(); // << ESTORNO
             btnCancelar.Click += (s, e) => LimparCaixa();
 
             grdItens.RowPrePaint += (s, e) =>
@@ -108,7 +127,7 @@ namespace FeirinhaCodorna.Forms
             lblCliente.ForeColor = Color.Gray;
             lblTotal.Text = "Total: R$ 0,00";
 
-            Load += (s, e) => txtEan.Focus();
+            VisibleChanged += (s, e) => { if (Visible) txtEan.Focus(); };
         }
 
         // ── EAN ───────────────────────────────────────────────────────
@@ -118,11 +137,6 @@ namespace FeirinhaCodorna.Forms
             {
                 e.SuppressKeyPress = true;
                 BuscarPorEan();
-            }
-            else if (e.KeyCode == Keys.Tab && _produtoAtual != null)
-            {
-                e.SuppressKeyPress = true;
-                txtPeso.Focus();
             }
         }
 
@@ -146,8 +160,7 @@ namespace FeirinhaCodorna.Forms
                 _produtoAtual = p;
                 lblProdutoAtual.Text = $"▶ {p.Nome}  —  R$ {p.Preco:F2}/kg";
                 lblProdutoAtual.ForeColor = Color.FromArgb(15, 110, 86);
-                txtPeso.Focus();
-                txtPeso.SelectAll();
+                btnTara.Focus();
             }
             else
             {
@@ -174,11 +187,6 @@ namespace FeirinhaCodorna.Forms
                 e.SuppressKeyPress = true;
                 CancelarPesado();
             }
-            else if (e.KeyCode == Keys.Tab)
-            {
-                e.SuppressKeyPress = true;
-                btnAddPesado.Focus();
-            }
         }
 
         private void ConfirmarPesado()
@@ -204,9 +212,32 @@ namespace FeirinhaCodorna.Forms
         {
             _produtoAtual = null;
             lblProdutoAtual.Text = "";
+            _tara = 0m;
+            btnTara.Text = "Tara";
+            btnTara.BackColor = System.Drawing.Color.FromArgb(200, 200, 195);
             txtEan.Clear();
             txtPeso.Clear();
             txtEan.Focus();
+        }
+
+        // ── Tara ──────────────────────────────────────────────────────
+        private void CapturarTara()
+        {
+            if (!decimal.TryParse(txtPeso.Text.Replace(',', '.'),
+                System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out decimal pesoAtual) || pesoAtual <= 0)
+            {
+                MessageBox.Show("Coloque o prato/recipiente na balança antes de tarar.",
+                    "Tara", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            _tara = pesoAtual;
+            btnTara.Text = $"Tara\n{_tara:F3}kg";
+            btnTara.BackColor = System.Drawing.Color.FromArgb(255, 193, 7);
+            txtPeso.Text = "0,000";
+            txtPeso.Focus();
         }
 
         // ── Janela de quantidade ──────────────────────────────────────
@@ -348,6 +379,7 @@ namespace FeirinhaCodorna.Forms
         // ─────────────────────────────────────────────────────────────
         // FINALIZAR — pagamento em forma única
         // ─────────────────────────────────────────────────────────────
+
         private void FinalizarVenda(FormaPagamento forma)
         {
             if (_itens.Count == 0)
@@ -374,17 +406,47 @@ namespace FeirinhaCodorna.Forms
                 }
             }
 
+            // ── Dinheiro: abre FormTroco (já tinha confirmação) ──────────
             if (forma == FormaPagamento.Dinheiro)
             {
                 using var dlgTroco = new FormTroco(_itens.Sum(i => i.Subtotal), _itens);
                 if (dlgTroco.ShowDialog(this) != DialogResult.OK)
-                    return;
+                    return;   // cliente cancelou — itens permanecem no carrinho
+            }
+            // ── Débito / Crédito / Pix: aguarda confirmação do operador ──
+            else if (forma == FormaPagamento.CartaoDebito ||
+                     forma == FormaPagamento.CartaoCredito ||
+                     forma == FormaPagamento.Pix)
+            {
+                string nomePagamento = forma switch
+                {
+                    FormaPagamento.CartaoDebito => "Débito",
+                    FormaPagamento.CartaoCredito => "Crédito",
+                    FormaPagamento.Pix => "Pix",
+                    _ => forma.ToString()
+                };
+
+                string emoji = forma == FormaPagamento.Pix ? "📲" : "💳";
+
+                var confirmado = MessageBox.Show(
+                    $"{emoji}  Pagamento via {nomePagamento}\n\n" +
+                    $"Total: R$ {_itens.Sum(i => i.Subtotal):F2}\n\n" +
+                    $"{(forma == FormaPagamento.Pix ? "Confirme o Pix no celular" : "Passe o cartão na maquininha")} e clique em\n" +
+                    $"✔ SIM — quando o pagamento for aprovado\n" +
+                    $"✖ NÃO — para cancelar e tentar outra forma",
+                    $"Aguardando {nomePagamento}",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button1);
+
+                if (confirmado != DialogResult.Yes)
+                    return;   // não aprovado — itens permanecem no carrinho
             }
 
             SalvarVendaFinalizada(
                 new List<ParcialPagamento>
                 {
-                    new() { Forma = forma, Valor = _itens.Sum(i => i.Subtotal) }
+            new() { Forma = forma, Valor = _itens.Sum(i => i.Subtotal) }
                 },
                 forma);
         }
@@ -405,11 +467,9 @@ namespace FeirinhaCodorna.Forms
             if (dlg.ShowDialog(this) != DialogResult.OK)
                 return;
 
-            // se o operador selecionou o cliente dentro do dialog, sincroniza aqui
             if (dlg.ClienteSelecionado != null)
                 SelecionarCliente(dlg.ClienteSelecionado);
 
-            // forma principal = a de maior valor (usada para registrar a venda)
             var formaPrincipal = dlg.Pagamentos
                 .OrderByDescending(p => p.Valor)
                 .First().Forma;
@@ -418,17 +478,15 @@ namespace FeirinhaCodorna.Forms
         }
 
         // ─────────────────────────────────────────────────────────────
-        // NÚCLEO — grava a venda (usado por ambos os fluxos acima)
+        // NÚCLEO — grava a venda
         // ─────────────────────────────────────────────────────────────
         private void SalvarVendaFinalizada(List<ParcialPagamento> pagamentos, FormaPagamento formaRegistro)
         {
             decimal total = _itens.Sum(i => i.Subtotal);
 
-            // atualiza caderneta se houver parcela fiada
             var parcelaCaderneta = pagamentos.FirstOrDefault(p => p.Forma == FormaPagamento.Fiado);
             if (parcelaCaderneta != null)
             {
-                // _clienteSelecionado já foi sincronizado em AbrirPagamentoMisto — não pode ser null aqui
                 _db.AtualizarSaldoFiado(_clienteSelecionado!.Id, parcelaCaderneta.Valor);
             }
 
@@ -442,7 +500,6 @@ namespace FeirinhaCodorna.Forms
             };
             _db.SalvarVenda(venda);
 
-            // mensagem de confirmação detalhada
             var linhas = pagamentos.Select(p =>
             {
                 string nome = p.Forma switch
@@ -464,7 +521,7 @@ namespace FeirinhaCodorna.Forms
             LimparCaixa();
         }
 
-        // ── LimparCaixa — NÃO MEXE ───────────────────────────────────
+        // ── LimparCaixa ───────────────────────────────────────────────
         private void LimparCaixa()
         {
             _itens.Clear();
@@ -472,6 +529,107 @@ namespace FeirinhaCodorna.Forms
             AtualizarTotal();
             LimparCliente();
             CancelarPesado();
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // ESTORNO
+        // ─────────────────────────────────────────────────────────────
+        private void EstornarUltimaVenda()
+        {
+            int? vendaId = _db.UltimaVendaId();
+
+            if (vendaId == null)
+            {
+                MessageBox.Show("Nenhuma venda disponível para estorno.",
+                    "Estorno", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var venda = _db.BuscarVendaComItens(vendaId.Value);
+            if (venda == null) return;
+
+            var resumo = string.Join("\n", venda.Itens.Select(i =>
+                $"  • {i.ProdutoNome} — " +
+                $"{(i.Quantidade % 1 == 0 ? $"{i.Quantidade:F0}" : $"{i.Quantidade:F3}")} x " +
+                $"R$ {i.PrecoUnitario:F2} = R$ {i.Subtotal:F2}"));
+
+            string cliente = string.IsNullOrEmpty(venda.ClienteNome) ? "Avulso" : venda.ClienteNome;
+
+            var confirm = MessageBox.Show(
+                $"Confirma estorno da última venda?\n\n" +
+                $"Data: {venda.DataHora:dd/MM/yyyy HH:mm}\n" +
+                $"Cliente: {cliente}\n" +
+                $"Total: R$ {venda.Total:F2}\n\n" +
+                $"Itens:\n{resumo}\n\n" +
+                $"O estoque será devolvido automaticamente.",
+                "Confirmar Estorno",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirm != DialogResult.Yes) return;
+
+            // pede o motivo
+            using var dlgMotivo = new Form
+            {
+                Text = "Motivo do Estorno",
+                Size = new Size(420, 165),
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false,
+                BackColor = Color.FromArgb(245, 245, 242)
+            };
+
+            var lblMot = new Label
+            {
+                Text = "Informe o motivo do estorno:",
+                AutoSize = true,
+                Font = new Font("Segoe UI", 10F),
+                Location = new Point(14, 14)
+            };
+
+            var txtMotivo = new TextBox
+            {
+                Font = new Font("Segoe UI", 11F),
+                Location = new Point(14, 40),
+                Width = 376,
+                PlaceholderText = "Ex: Cartão recusado, Pix não confirmado, Cliente desistiu..."
+            };
+
+            var btnOkMot = new Button
+            {
+                Text = "Confirmar Estorno",
+                DialogResult = DialogResult.OK,
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                BackColor = Color.FromArgb(180, 30, 30),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(180, 36),
+                Location = new Point(210, 84)
+            };
+            btnOkMot.FlatAppearance.BorderSize = 0;
+
+            dlgMotivo.Controls.AddRange(new Control[] { lblMot, txtMotivo, btnOkMot });
+            dlgMotivo.AcceptButton = btnOkMot;
+
+            if (dlgMotivo.ShowDialog(this) != DialogResult.OK) return;
+
+            string motivo = string.IsNullOrWhiteSpace(txtMotivo.Text)
+                ? "Sem motivo informado"
+                : txtMotivo.Text.Trim();
+
+            _db.EstornarVenda(vendaId.Value, motivo);
+
+            MessageBox.Show(
+                $"Estorno realizado!\n\n" +
+                $"Venda #{vendaId} estornada.\n" +
+                $"Estoque devolvido.\n" +
+                (venda.FormaPagamento == FormaPagamento.Fiado
+                    ? "Saldo da caderneta revertido.\n" : "") +
+                $"\nMotivo: {motivo}",
+                "Estorno Concluído", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            txtEan.Focus();
         }
     }
 }

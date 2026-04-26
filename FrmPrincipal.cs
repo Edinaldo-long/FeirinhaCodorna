@@ -109,9 +109,10 @@ namespace FeirinhaCodorna
             layout.Controls.Add(BotaoMenu("  Despesas", 4));
             layout.Controls.Add(BotaoMenu("  Relatórios", 5));
             layout.Controls.Add(BotaoMenu("  Caixa / Turno", 6));
+            layout.Controls.Add(BotaoMenu("  Estornos / Devoluções", 9)); // << novo
 
             layout.Controls.Add(RotuloSecao("CONFIGURAÇÕES"));
-            layout.Controls.Add(BotaoMenu("  Usuários", 8)); // novo
+            layout.Controls.Add(BotaoMenu("  Usuários", 8));
 
             painelMenu.Controls.Add(layout);
             Controls.Add(painelMenu);
@@ -183,10 +184,11 @@ namespace FeirinhaCodorna
                 case 2: AbrirTela(new FormFornecedores(_db)); break;
                 case 3: AbrirTela(new FormEstoque(_db)); break;
                 case 4: AbrirTela(new FormDespesas(_db)); break;
-                case 5: AbrirTela(new FormRelatorio(_db)); break;
+                case 5: MessageBox.Show("Relatórios em breve."); break;
                 case 6: AbrirTela(new FormGerenciamentoCaixa(_db)); break;
                 case 7: AbrirTela(new FrmGerenciarFuncionarios()); break;
-                case 8: AbrirTela(new FrmGerenciarUsuarios()); break; // novo
+                case 8: AbrirTela(new FrmGerenciarUsuarios()); break;
+                case 9: AbrirTela(new FormEstornoVenda(_db)); break;
             }
         }
 

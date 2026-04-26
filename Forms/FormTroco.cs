@@ -8,12 +8,6 @@ using FeirinhaCodorna.Models;
 
 namespace FeirinhaCodorna.Forms
 {
-    /// <summary>
-    /// Dialog de pagamento em dinheiro com cálculo de troco.
-    /// Uso:
-    ///   using var dlg = new FormTroco(total, itens);
-    ///   if (dlg.ShowDialog(this) == DialogResult.OK) { /* finalizar venda */ }
-    /// </summary>
     public class FormTroco : Form
     {
         public decimal ValorRecebido { get; private set; }
@@ -29,6 +23,7 @@ namespace FeirinhaCodorna.Forms
         private Label lblTrocoTitulo = null!;
         private Panel painelTroco = null!;
         private Button btnConfirmar = null!;
+        private Button btnCancelar = null!;
         private Button btnToggle = null!;
         private DataGridView grdItens2 = null!;
 
@@ -57,12 +52,12 @@ namespace FeirinhaCodorna.Forms
 
             const int W = 440;
             const int X = 20;
-            const int IW = W - 40; // largura interna
+            const int IW = W - 40;
             int y = 16;
 
             var fTitulo = new Font("Segoe UI", 13F, FontStyle.Bold);
             var fPequena = new Font("Segoe UI", 10F);
-            var fBotao = new Font("Segoe UI", 13F, FontStyle.Bold);
+            var fBotao = new Font("Segoe UI", 12F, FontStyle.Bold);
             var fTotal = new Font("Segoe UI", 30F, FontStyle.Bold);
 
             // ── Título ───────────────────────────────────────────────
@@ -76,7 +71,7 @@ namespace FeirinhaCodorna.Forms
             });
             y += 36;
 
-            // ── Botão toggle lista ────────────────────────────────────
+            // ── Toggle itens ─────────────────────────────────────────
             btnToggle = new Button
             {
                 Text = $"▼   Ver itens da compra  ({_itens.Count} produto{(_itens.Count != 1 ? "s" : "")})",
@@ -114,7 +109,6 @@ namespace FeirinhaCodorna.Forms
             grdItens2.Columns.Add("Produto", "Produto");
             grdItens2.Columns.Add("Qtd", "Qtd");
             grdItens2.Columns.Add("Subtotal", "Subtotal");
-            // larguras fixas — evita conflito com AutoSizeColumnsMode durante construção
             grdItens2.Columns["Produto"].Width = IW - 160;
             grdItens2.Columns["Qtd"].Width = 80;
             grdItens2.Columns["Subtotal"].Width = 80;
@@ -132,7 +126,6 @@ namespace FeirinhaCodorna.Forms
                 grdItens2.Rows.Add(item.ProdutoNome, qtd, $"R$ {item.Subtotal:F2}");
             }
             Controls.Add(grdItens2);
-            // y NÃO avança — grid começa oculto
 
             // ── Painel total verde ────────────────────────────────────
             var pTotal = new Panel { Location = new Point(X, y), Size = new Size(IW, 90), BackColor = Verde };
@@ -174,6 +167,15 @@ namespace FeirinhaCodorna.Forms
                 if (!char.IsDigit(e.KeyChar) && e.KeyChar != ',' && e.KeyChar != '.' && e.KeyChar != '\b')
                     e.Handled = true;
             };
+            txtValorPago.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter && btnConfirmar.Enabled)
+                {
+                    e.Handled = true;
+                    e.SuppressKeyPress = true;
+                    ConfirmarPagamento();
+                }
+            };
             Controls.Add(txtValorPago);
             y += 64;
 
@@ -185,11 +187,9 @@ namespace FeirinhaCodorna.Forms
                 BackColor = Color.FromArgb(232, 232, 228),
                 BorderStyle = BorderStyle.FixedSingle
             };
-
             lblTrocoTitulo = new Label { Text = "TROCO A DEVOLVER", Font = new Font("Segoe UI", 11F), ForeColor = Color.FromArgb(110, 110, 110), AutoSize = true };
             lblTrocoValor = new Label { Text = "—", Font = new Font("Segoe UI", 26F, FontStyle.Bold), ForeColor = Color.FromArgb(110, 110, 110), AutoSize = true };
             lblTrocoObs = new Label { Text = "", Font = new Font("Segoe UI", 11F), ForeColor = Color.FromArgb(110, 110, 110), AutoSize = true };
-
             painelTroco.Controls.AddRange(new Control[] { lblTrocoTitulo, lblTrocoValor, lblTrocoObs });
             painelTroco.Layout += (s, e) =>
             {
@@ -206,39 +206,67 @@ namespace FeirinhaCodorna.Forms
             // ── Botões ────────────────────────────────────────────────
             int bw = (IW - 10) / 2;
 
-            var btnCancelar = new Button
+            // Cancelar — volta ao carrinho para tentar outra forma
+            btnCancelar = new Button
             {
-                Text = "Cancelar",
+                Text = "✖  Outra forma",
                 Font = fBotao,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(215, 215, 210),
                 ForeColor = Color.FromArgb(70, 70, 70),
                 Location = new Point(X, y),
-                Size = new Size(bw, 52)
+                Size = new Size(bw, 52),
+                Cursor = Cursors.Hand
             };
             btnCancelar.FlatAppearance.BorderSize = 0;
             btnCancelar.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             Controls.Add(btnCancelar);
 
+            // Confirmar — só habilitado quando o troco está OK
             btnConfirmar = new Button
             {
-                Text = "Finalizar venda",
+                Text = "✔  Confirmar Dinheiro",
                 Font = fBotao,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Cinza,
                 ForeColor = Color.White,
                 Enabled = false,
                 Location = new Point(X + bw + 10, y),
-                Size = new Size(bw, 52)
+                Size = new Size(bw, 52),
+                Cursor = Cursors.Hand
             };
             btnConfirmar.FlatAppearance.BorderSize = 0;
-            btnConfirmar.Click += (s, e) => { DialogResult = DialogResult.OK; Close(); };
+            btnConfirmar.Click += (s, e) => ConfirmarPagamento();
             Controls.Add(btnConfirmar);
 
-            y += 60;
-            ClientSize = new Size(W, y + 12);
+            AcceptButton = btnConfirmar;
+            CancelButton = btnCancelar;
 
+            y += 60;
+
+            // ── Aviso ─────────────────────────────────────────────────
+            Controls.Add(new Label
+            {
+                Text = "⚠  Clique em \"Outra forma\" se o cliente quiser pagar de outro modo.",
+                Font = new Font("Segoe UI", 8F, FontStyle.Italic),
+                ForeColor = Color.FromArgb(150, 100, 0),
+                Location = new Point(X, y),
+                Size = new Size(IW, 18),
+                AutoSize = false
+            });
+            y += 22;
+
+            ClientSize = new Size(W, y + 12);
             Shown += (s, e) => { txtValorPago.Focus(); txtValorPago.SelectAll(); };
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // Confirmar
+        // ─────────────────────────────────────────────────────────────
+        private void ConfirmarPagamento()
+        {
+            DialogResult = DialogResult.OK;
+            Close();
         }
 
         // ─────────────────────────────────────────────────────────────
@@ -248,7 +276,7 @@ namespace FeirinhaCodorna.Forms
         {
             string texto = txtValorPago.Text.Replace(',', '.');
             bool valido = decimal.TryParse(texto, NumberStyles.Any,
-                                CultureInfo.InvariantCulture, out decimal pago) && pago > 0;
+                               CultureInfo.InvariantCulture, out decimal pago) && pago > 0;
 
             if (!valido) { SetNeutro(); return; }
 
@@ -265,7 +293,8 @@ namespace FeirinhaCodorna.Forms
             lblTrocoValor.Text = "—"; lblTrocoValor.Font = new Font("Segoe UI", 26F, FontStyle.Bold); lblTrocoValor.ForeColor = Color.FromArgb(110, 110, 110);
             lblTrocoObs.Text = ""; lblTrocoObs.ForeColor = Color.FromArgb(110, 110, 110);
             painelTroco.BackColor = Color.FromArgb(232, 232, 228);
-            btnConfirmar.Enabled = false; btnConfirmar.BackColor = Cinza;
+            btnConfirmar.Enabled = false;
+            btnConfirmar.BackColor = Cinza;
             painelTroco.PerformLayout();
         }
 
@@ -275,23 +304,26 @@ namespace FeirinhaCodorna.Forms
             lblTrocoValor.Text = "Valor insuficiente"; lblTrocoValor.Font = new Font("Segoe UI", 16F, FontStyle.Bold); lblTrocoValor.ForeColor = Vermelho;
             lblTrocoObs.Text = falta; lblTrocoObs.ForeColor = Vermelho;
             painelTroco.BackColor = VermelhoClaro;
-            btnConfirmar.Enabled = false; btnConfirmar.BackColor = Cinza;
+            btnConfirmar.Enabled = false;
+            btnConfirmar.BackColor = Cinza;
             painelTroco.PerformLayout();
         }
 
         private void SetOk(string valorTexto, string obs, decimal pago, decimal troco)
         {
-            ValorRecebido = pago; Troco = troco;
+            ValorRecebido = pago;
+            Troco = troco;
             lblTrocoTitulo.ForeColor = VerdeEscuro;
             lblTrocoValor.Text = valorTexto; lblTrocoValor.Font = new Font("Segoe UI", troco == 0 ? 22F : 26F, FontStyle.Bold); lblTrocoValor.ForeColor = VerdeEscuro;
             lblTrocoObs.Text = obs; lblTrocoObs.ForeColor = VerdeEscuro;
             painelTroco.BackColor = VerdeClaro;
-            btnConfirmar.Enabled = true; btnConfirmar.BackColor = Verde;
+            btnConfirmar.Enabled = true;
+            btnConfirmar.BackColor = Verde;
             painelTroco.PerformLayout();
         }
 
         // ─────────────────────────────────────────────────────────────
-        // Toggle lista de itens — empurra/puxa controles abaixo
+        // Toggle lista de itens
         // ─────────────────────────────────────────────────────────────
         private void ToggleItens(object? sender, EventArgs e)
         {
