@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.IO; // Necessário para encontrar a imagem na pasta
+using System.IO;
 
 namespace FeirinhaCodorna
 {
@@ -10,7 +10,7 @@ namespace FeirinhaCodorna
     {
         private ProgressBar pbStatus;
         private Label lblStatus;
-        private PictureBox pbLogo; // Adicionado
+        private PictureBox pbLogo;
 
         public FrmSplash()
         {
@@ -22,19 +22,19 @@ namespace FeirinhaCodorna
             pbStatus = new ProgressBar { Size = new Size(400, 20), Location = new Point(50, 330), Style = ProgressBarStyle.Continuous };
             lblStatus = new Label { Size = new Size(400, 30), Location = new Point(50, 360), TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 10, FontStyle.Regular), Text = "Inicializando..." };
 
-            // Adicionando a sua logo
+            string logoPath = Path.Combine(Application.StartupPath, "Logo_Feirinha_do_codorna.png");
+
             pbLogo = new PictureBox
             {
                 Size = new Size(300, 300),
                 Location = new Point(100, 20),
                 SizeMode = PictureBoxSizeMode.Zoom,
-                Image = Image.FromFile(Path.Combine(Application.StartupPath, "Logo_Feirinha_do_codorna.png"))
+                Image = File.Exists(logoPath) ? Image.FromFile(logoPath) : null
             };
 
             this.Controls.Add(pbStatus);
             this.Controls.Add(lblStatus);
-            this.Controls.Add(pbLogo); // Adicionado
-
+            this.Controls.Add(pbLogo);
             this.Load += FrmSplash_Load;
         }
 
